@@ -95,10 +95,17 @@ public class XMLMapperBuilder extends BaseBuilder {
     this.resource = resource;
   }
 
+  /**
+   * 解析
+   */
   public void parse() {
+    //防止重复加载
     if (!configuration.isResourceLoaded(resource)) {
+      //配置mapper
       configurationElement(parser.evalNode("/mapper"));
+      //标记该resource已经被加载过
       configuration.addLoadedResource(resource);
+      //绑定映射器到namespace
       bindMapperForNamespace();
     }
 
@@ -111,24 +118,44 @@ public class XMLMapperBuilder extends BaseBuilder {
     return sqlFragments.get(refid);
   }
 
+  /**
+   * 配置mapper元素
+   * <mapper namespace="org.mybatis.example.BlogMapper">
+   	  <select id="selectBlog" parameterType="int" resultType="Blog">
+   	    select * from Blog where id = #{id}
+   	  </select>
+   	</mapper>
+   * @param context
+   */
   private void configurationElement(XNode context) {
     try {
+      //TODO 配置namespace
       String namespace = context.getStringAttribute("namespace");
       if (namespace == null || namespace.equals("")) {
         throw new BuilderException("Mapper's namespace cannot be empty");
       }
       builderAssistant.setCurrentNamespace(namespace);
+      //TODO 配置cache-ref
       cacheRefElement(context.evalNode("cache-ref"));
+      //TODO 配置cache
       cacheElement(context.evalNode("cache"));
+      //TODO 配置parameterMap(已经废弃,老式风格的参数映射)
       parameterMapElement(context.evalNodes("/mapper/parameterMap"));
+      //TODO 配置resultMap(高级功能)
       resultMapElements(context.evalNodes("/mapper/resultMap"));
+      //TODO 配置sql(定义可重用的 SQL 代码段)
       sqlElement(context.evalNodes("/mapper/sql"));
+      // 配置select|insert|update|delete
       buildStatementFromContext(context.evalNodes("select|insert|update|delete"));
     } catch (Exception e) {
       throw new BuilderException("Error parsing Mapper XML. The XML location is '" + resource + "'. Cause: " + e, e);
     }
   }
 
+  /**
+   * 配置select|insert|update|delete
+   * @param list
+   */
   private void buildStatementFromContext(List<XNode> list) {
     if (configuration.getDatabaseId() != null) {
       buildStatementFromContext(list, configuration.getDatabaseId());
@@ -136,12 +163,19 @@ public class XMLMapperBuilder extends BaseBuilder {
     buildStatementFromContext(list, null);
   }
 
+  /**
+   * 配置select|insert|update|delete
+   * @param list
+   * @param requiredDatabaseId
+   */
   private void buildStatementFromContext(List<XNode> list, String requiredDatabaseId) {
     for (XNode context : list) {
+      //TODO 构建sql语句
       final XMLStatementBuilder statementParser = new XMLStatementBuilder(configuration, builderAssistant, context, requiredDatabaseId);
       try {
         statementParser.parseStatementNode();
       } catch (IncompleteElementException e) {
+        //sql语句不完整，存到configuration
         configuration.addIncompleteStatement(statementParser);
       }
     }
@@ -343,6 +377,11 @@ public class XMLMapperBuilder extends BaseBuilder {
     return builderAssistant.buildDiscriminator(resultType, column, javaTypeClass, jdbcTypeEnum, typeHandlerClass, discriminatorMap);
   }
 
+  /**
+   * 配置sql(定义可重用的 SQL 代码段)
+   * @param list
+   * @throws Exception
+   */
   private void sqlElement(List<XNode> list) throws Exception {
     if (configuration.getDatabaseId() != null) {
       sqlElement(list, configuration.getDatabaseId());
