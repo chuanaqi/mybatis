@@ -22,6 +22,7 @@ import org.apache.ibatis.mapping.MappedStatement;
 
 /**
  * @author Clinton Begin
+ * 主键生成器
  */
 public interface KeyGenerator {
 

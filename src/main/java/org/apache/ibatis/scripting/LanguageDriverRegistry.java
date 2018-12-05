@@ -20,6 +20,8 @@ import java.util.Map;
 
 /**
  * @author Frank D. Martinez [mnesarco]
+ * 语言驱动注册器
+ * 两种注册方式
  */
 public class LanguageDriverRegistry {
 
@@ -31,6 +33,7 @@ public class LanguageDriverRegistry {
     if (cls == null) {
       throw new IllegalArgumentException("null is not a valid Language Driver");
     }
+    //如果没有注册，先去注册
     if (!LANGUAGE_DRIVER_MAP.containsKey(cls)) {
       try {
         LANGUAGE_DRIVER_MAP.put(cls, cls.newInstance());

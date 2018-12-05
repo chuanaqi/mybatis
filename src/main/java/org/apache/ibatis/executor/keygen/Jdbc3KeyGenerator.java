@@ -38,6 +38,8 @@ import org.apache.ibatis.type.TypeHandlerRegistry;
 /**
  * @author Clinton Begin
  * @author Kazuki Shimizu
+ * 用于处理数据库支持自增主键的情况，如MySQL的auto_increment
+ * 核心是使用JDBC3的Statement.getGeneratedKeys
  */
 public class Jdbc3KeyGenerator implements KeyGenerator {
 
@@ -58,6 +60,12 @@ public class Jdbc3KeyGenerator implements KeyGenerator {
     processBatch(ms, stmt, parameter);
   }
 
+  /**
+   * 批处理
+   * @param ms
+   * @param stmt
+   * @param parameter
+   */
   public void processBatch(MappedStatement ms, Statement stmt, Object parameter) {
     final String[] keyProperties = ms.getKeyProperties();
     if (keyProperties == null || keyProperties.length == 0) {

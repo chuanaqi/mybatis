@@ -159,21 +159,53 @@ public class Configuration {
    */
   protected Class<?> configurationFactory;
 
+  /**
+   * mapper注册机
+   */
   protected final MapperRegistry mapperRegistry = new MapperRegistry(this);
+  /**
+   * 责任链模式，保存所有拦截器
+   */
   protected final InterceptorChain interceptorChain = new InterceptorChain();
+  /**
+   * 类型处理器注册机
+   */
   protected final TypeHandlerRegistry typeHandlerRegistry = new TypeHandlerRegistry();
+  /**
+   * 类型别名注册机
+   */
   protected final TypeAliasRegistry typeAliasRegistry = new TypeAliasRegistry();
+
+  /**
+   * 语言注册机
+   */
   protected final LanguageDriverRegistry languageRegistry = new LanguageDriverRegistry();
 
+  /**
+   * 映射的sql语句，存在map中
+   */
   protected final Map<String, MappedStatement> mappedStatements = new StrictMap<>("Mapped Statements collection");
+
+  /**
+   * 存放缓存的Map
+   */
   protected final Map<String, Cache> caches = new StrictMap<>("Caches collection");
+  /**
+   * 存放结果映射的map
+   */
   protected final Map<String, ResultMap> resultMaps = new StrictMap<>("Result Maps collection");
+  /**
+   * 存放参数的map
+   */
   protected final Map<String, ParameterMap> parameterMaps = new StrictMap<>("Parameter Maps collection");
+  /**
+   * 主键生成策略
+   */
   protected final Map<String, KeyGenerator> keyGenerators = new StrictMap<>("Key Generators collection");
 
   protected final Set<String> loadedResources = new HashSet<>();
   protected final Map<String, XNode> sqlFragments = new StrictMap<>("XML fragments parsed from previous mappers");
-
+  //不完整的SQL语句
   protected final Collection<XMLStatementBuilder> incompleteStatements = new LinkedList<>();
   protected final Collection<CacheRefResolver> incompleteCacheRefs = new LinkedList<>();
   protected final Collection<ResultMapResolver> incompleteResultMaps = new LinkedList<>();
@@ -192,6 +224,7 @@ public class Configuration {
   }
 
   public Configuration() {
+    //类型别名注册
     typeAliasRegistry.registerAlias("JDBC", JdbcTransactionFactory.class);
     typeAliasRegistry.registerAlias("MANAGED", ManagedTransactionFactory.class);
 
@@ -557,23 +590,59 @@ public class Configuration {
     return getDefaultScriptingLanguageInstance();
   }
 
+  /**
+   * 创建元对象
+   * @param object
+   * @return
+   */
   public MetaObject newMetaObject(Object object) {
     return MetaObject.forObject(object, objectFactory, objectWrapperFactory, reflectorFactory);
   }
 
+  /**
+   * 创建参数处理器
+   * @param mappedStatement
+   * @param parameterObject
+   * @param boundSql
+   * @return
+   */
   public ParameterHandler newParameterHandler(MappedStatement mappedStatement, Object parameterObject, BoundSql boundSql) {
+    //创建ParameterHandler
     ParameterHandler parameterHandler = mappedStatement.getLang().createParameterHandler(mappedStatement, parameterObject, boundSql);
+    //插入插件
     parameterHandler = (ParameterHandler) interceptorChain.pluginAll(parameterHandler);
     return parameterHandler;
   }
 
+  /**
+   * 创建结果集处理器
+   * @param executor
+   * @param mappedStatement
+   * @param rowBounds
+   * @param parameterHandler
+   * @param resultHandler
+   * @param boundSql
+   * @return
+   */
   public ResultSetHandler newResultSetHandler(Executor executor, MappedStatement mappedStatement, RowBounds rowBounds, ParameterHandler parameterHandler,
       ResultHandler resultHandler, BoundSql boundSql) {
+    //创建默认结果集
     ResultSetHandler resultSetHandler = new DefaultResultSetHandler(executor, mappedStatement, parameterHandler, resultHandler, boundSql, rowBounds);
+    //插入插件
     resultSetHandler = (ResultSetHandler) interceptorChain.pluginAll(resultSetHandler);
     return resultSetHandler;
   }
 
+  /**
+   * 创建语句处理器
+   * @param executor
+   * @param mappedStatement
+   * @param parameterObject
+   * @param rowBounds
+   * @param resultHandler
+   * @param boundSql
+   * @return
+   */
   public StatementHandler newStatementHandler(Executor executor, MappedStatement mappedStatement, Object parameterObject, RowBounds rowBounds, ResultHandler resultHandler, BoundSql boundSql) {
     StatementHandler statementHandler = new RoutingStatementHandler(executor, mappedStatement, parameterObject, rowBounds, resultHandler, boundSql);
     statementHandler = (StatementHandler) interceptorChain.pluginAll(statementHandler);
@@ -584,10 +653,17 @@ public class Configuration {
     return newExecutor(transaction, defaultExecutorType);
   }
 
+  /**
+   * 创建执行器
+   * @param transaction
+   * @param executorType
+   * @return
+   */
   public Executor newExecutor(Transaction transaction, ExecutorType executorType) {
     executorType = executorType == null ? defaultExecutorType : executorType;
     executorType = executorType == null ? ExecutorType.SIMPLE : executorType;
     Executor executor;
+    //产生3种执行器BatchExecutor/ReuseExecutor/SimpleExecutor
     if (ExecutorType.BATCH == executorType) {
       executor = new BatchExecutor(this, transaction);
     } else if (ExecutorType.REUSE == executorType) {
@@ -595,6 +671,7 @@ public class Configuration {
     } else {
       executor = new SimpleExecutor(this, transaction);
     }
+    //若要求缓存，生成CachingExecutor(默认有缓存，所以默认返回CachingExecutor),装饰者模式
     if (cacheEnabled) {
       executor = new CachingExecutor(executor);
     }
@@ -749,6 +826,11 @@ public class Configuration {
     interceptorChain.addInterceptor(interceptor);
   }
 
+  /**
+   * 将包下所有类加入到mapper
+   * @param packageName
+   * @param superType
+   */
   public void addMappers(String packageName, Class<?> superType) {
     mapperRegistry.addMappers(packageName, superType);
   }

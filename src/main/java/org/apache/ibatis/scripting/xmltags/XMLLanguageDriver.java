@@ -30,20 +30,30 @@ import org.apache.ibatis.session.Configuration;
 
 /**
  * @author Eduardo Macarron
+ * XML语言驱动
  */
 public class XMLLanguageDriver implements LanguageDriver {
 
   @Override
   public ParameterHandler createParameterHandler(MappedStatement mappedStatement, Object parameterObject, BoundSql boundSql) {
+    //返回默认参数处理器
     return new DefaultParameterHandler(mappedStatement, parameterObject, boundSql);
   }
 
   @Override
   public SqlSource createSqlSource(Configuration configuration, XNode script, Class<?> parameterType) {
+    //XML脚本构建器解析
     XMLScriptBuilder builder = new XMLScriptBuilder(configuration, script, parameterType);
     return builder.parseScriptNode();
   }
 
+  /**
+   * 使用注解方式构建mapper
+   * @param configuration The MyBatis configuration
+   * @param script The content of the annotation
+   * @param parameterType input parameter type got from a mapper method or specified in the parameterType xml attribute. Can be null.
+   * @return
+   */
   @Override
   public SqlSource createSqlSource(Configuration configuration, String script, Class<?> parameterType) {
     // issue #3

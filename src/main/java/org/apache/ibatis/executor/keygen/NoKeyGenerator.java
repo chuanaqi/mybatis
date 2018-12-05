@@ -23,6 +23,9 @@ import org.apache.ibatis.mapping.MappedStatement;
 /**
  * @author Clinton Begin
  * @author Kazuki Shimizu
+ * 空实现，不需要处理主键
+ * MappedStatement有一个keyGenerator属性，默认的就用NoKeyGenerator
+ * 都是空方法
  */
 public class NoKeyGenerator implements KeyGenerator {
 

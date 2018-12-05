@@ -29,6 +29,7 @@ import org.apache.ibatis.session.RowBounds;
 /**
  * @author Clinton Begin
  * @author Jeff Butler
+ * 用于处理数据库不支持自增主键的情况，比如Oracle，postgres的sequence序列
  */
 public class SelectKeyGenerator implements KeyGenerator {
   
