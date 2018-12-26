@@ -30,17 +30,20 @@ import org.apache.ibatis.executor.BatchResult;
 import org.apache.ibatis.reflection.ExceptionUtil;
 
 /**
+ * SqlSession管理员,可参考SqlSessionManagerTest
  * @author Larry Meadors
  */
 public class SqlSessionManager implements SqlSessionFactory, SqlSession {
 
   private final SqlSessionFactory sqlSessionFactory;
+  // proxy
   private final SqlSession sqlSessionProxy;
-
+  // 保持线程局部变量SqlSession的地方
   private final ThreadLocal<SqlSession> localSqlSession = new ThreadLocal<>();
 
   private SqlSessionManager(SqlSessionFactory sqlSessionFactory) {
     this.sqlSessionFactory = sqlSessionFactory;
+    //动态代理，代理了localSqlSession中的sqlSession
     this.sqlSessionProxy = (SqlSession) Proxy.newProxyInstance(
         SqlSessionFactory.class.getClassLoader(),
         new Class[]{SqlSession.class},
@@ -74,7 +77,7 @@ public class SqlSessionManager implements SqlSessionFactory, SqlSession {
   public static SqlSessionManager newInstance(SqlSessionFactory sqlSessionFactory) {
     return new SqlSessionManager(sqlSessionFactory);
   }
-
+  // 设置线程局部变量sqlSession的方法
   public void startManagedSession() {
     this.localSqlSession.set(openSession());
   }
@@ -346,12 +349,16 @@ public class SqlSessionManager implements SqlSessionFactory, SqlSession {
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
       final SqlSession sqlSession = SqlSessionManager.this.localSqlSession.get();
       if (sqlSession != null) {
+        // 1、存在线程局部变量sqlSession
+        // （不提交、不回滚、不关闭，可在线程生命周期内，自定义sqlSession的提交、回滚、关闭时机，达到复用sqlSession的效果）
         try {
           return method.invoke(sqlSession, args);
         } catch (Throwable t) {
           throw ExceptionUtil.unwrapThrowable(t);
         }
       } else {
+        // 2、不存在线程局部变量sqlSession，创建一个自动提交、回滚、关闭的SqlSession
+        // （提交、回滚、关闭，将sqlSession的生命周期完全限定在方法内部）
         try (SqlSession autoSqlSession = openSession()) {
           try {
             final Object result = method.invoke(autoSqlSession, args);

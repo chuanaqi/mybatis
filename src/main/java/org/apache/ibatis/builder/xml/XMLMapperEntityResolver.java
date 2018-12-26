@@ -26,7 +26,7 @@ import org.xml.sax.SAXException;
 
 /**
  * Offline entity resolver for the MyBatis DTDs
- * 
+ * XML实体节点解析器  策略模式
  * @author Clinton Begin
  * @author Eduardo Macarron
  */
@@ -42,7 +42,7 @@ public class XMLMapperEntityResolver implements EntityResolver {
 
   /**
    * Converts a public DTD into a local one
-   * 
+   * 将公共的DTD转换为本地模式
    * @param publicId The public id that is what comes after "PUBLIC"
    * @param systemId The system id that is what comes after the public id.
    * @return The InputSource for the DTD
