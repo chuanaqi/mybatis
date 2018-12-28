@@ -28,6 +28,10 @@ import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.session.ResultHandler;
 import org.apache.ibatis.session.RowBounds;
 
+/**
+ * 3.3没有这个类
+ * 用于参数处理
+ */
 public class ParamNameResolver {
 
   private static final String GENERIC_NAME_PREFIX = "param";
@@ -56,12 +60,14 @@ public class ParamNameResolver {
     int paramCount = paramAnnotations.length;
     // get names from @Param annotations
     for (int paramIndex = 0; paramIndex < paramCount; paramIndex++) {
+      //跳过ResultHandler类型、RowBounds类型参数
       if (isSpecialParameter(paramTypes[paramIndex])) {
         // skip special parameters
         continue;
       }
       String name = null;
       for (Annotation annotation : paramAnnotations[paramIndex]) {
+        //Param注解字段，对传参重命名
         if (annotation instanceof Param) {
           hasParamAnnotation = true;
           name = ((Param) annotation).value();
@@ -70,17 +76,21 @@ public class ParamNameResolver {
       }
       if (name == null) {
         // @Param was not specified.
+        //<setting name="useActualParamName" value="true" />
+        //使用原参数名
         if (config.isUseActualParamName()) {
           name = getActualParamName(method, paramIndex);
         }
         if (name == null) {
           // use the parameter index as the name ("0", "1", ...)
           // gcode issue #71
+          //使用参数索引作为名称
           name = String.valueOf(map.size());
         }
       }
       map.put(paramIndex, name);
     }
+    //map转换为有序map
     names = Collections.unmodifiableSortedMap(map);
   }
 
@@ -88,6 +98,11 @@ public class ParamNameResolver {
     return ParamNameUtil.getParamNames(method).get(paramIndex);
   }
 
+  /**
+   * 分页类型、与结果处理器类型 返回true
+   * @param clazz
+   * @return
+   */
   private static boolean isSpecialParameter(Class<?> clazz) {
     return RowBounds.class.isAssignableFrom(clazz) || ResultHandler.class.isAssignableFrom(clazz);
   }

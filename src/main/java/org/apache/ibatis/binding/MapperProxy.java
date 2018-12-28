@@ -47,6 +47,7 @@ public class MapperProxy<T> implements InvocationHandler, Serializable {
   @Override
   public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
     try {
+      //object中的方法，代理类直接使用自己
       if (Object.class.equals(method.getDeclaringClass())) {
         return method.invoke(this, args);
       } else if (isDefaultMethod(method)) {
@@ -55,11 +56,13 @@ public class MapperProxy<T> implements InvocationHandler, Serializable {
     } catch (Throwable t) {
       throw ExceptionUtil.unwrapThrowable(t);
     }
+    //去缓存中找MapperMethod 这就是mapper不支持方法重载的原因
     final MapperMethod mapperMethod = cachedMapperMethod(method);
     return mapperMethod.execute(sqlSession, args);
   }
 
   private MapperMethod cachedMapperMethod(Method method) {
+    //JDK8的新用法
     return methodCache.computeIfAbsent(method, k -> new MapperMethod(mapperInterface, method, sqlSession.getConfiguration()));
   }
 
@@ -79,7 +82,7 @@ public class MapperProxy<T> implements InvocationHandler, Serializable {
   }
 
   /**
-   * Backport of java.lang.reflect.Method#isDefault()
+   * 不是abstract，也不是static的public方法
    */
   private boolean isDefaultMethod(Method method) {
     return (method.getModifiers()

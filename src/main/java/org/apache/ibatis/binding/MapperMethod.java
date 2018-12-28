@@ -40,6 +40,7 @@ import java.util.*;
  * @author Eduardo Macarron
  * @author Lasse Voss
  * @author Kazuki Shimizu
+ * 映射器方法
  */
 public class MapperMethod {
 
@@ -53,6 +54,7 @@ public class MapperMethod {
 
   public Object execute(SqlSession sqlSession, Object[] args) {
     Object result;
+    //insert|update|delete|select，分别调用SqlSession的4大类方法
     switch (command.getType()) {
       case INSERT: {
     	Object param = method.convertArgsToSqlCommandParam(args);
@@ -71,15 +73,20 @@ public class MapperMethod {
       }
       case SELECT:
         if (method.returnsVoid() && method.hasResultHandler()) {
+          //如果返回void 并且参数有resultHandler
+          //调用 void select(String statement, Object parameter, ResultHandler handler);方法
           executeWithResultHandler(sqlSession, args);
           result = null;
         } else if (method.returnsMany()) {
+          //返回多条
           result = executeForMany(sqlSession, args);
         } else if (method.returnsMap()) {
           result = executeForMap(sqlSession, args);
+          //返回是map
         } else if (method.returnsCursor()) {
           result = executeForCursor(sqlSession, args);
         } else {
+          //返回单条
           Object param = method.convertArgsToSqlCommandParam(args);
           result = sqlSession.selectOne(command.getName(), param);
           if (method.returnsOptional() &&
@@ -89,9 +96,12 @@ public class MapperMethod {
         }
         break;
       case FLUSH:
+        //预插入的作用(执行了这行代码之后,要插入的数据会锁定数据库的一行记录,
+        // 并把数据库默认返回的主键赋值给插入的对象,这样就可以把该对象的主键赋值给其他需要的对象中去了)
         result = sqlSession.flushStatements();
         break;
       default:
+        //非SQL命令类型抛异常
         throw new BindingException("Unknown execution method for: " + command.getName());
     }
     if (result == null && method.getReturnType().isPrimitive() && !method.returnsVoid()) {
@@ -134,6 +144,13 @@ public class MapperMethod {
     }
   }
 
+  /**
+   * 查询返回多条记录的处理方法
+   * @param sqlSession
+   * @param args
+   * @param <E>
+   * @return
+   */
   private <E> Object executeForMany(SqlSession sqlSession, Object[] args) {
     List<E> result;
     Object param = method.convertArgsToSqlCommandParam(args);
