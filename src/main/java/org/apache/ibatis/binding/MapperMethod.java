@@ -104,6 +104,7 @@ public class MapperMethod {
         //非SQL命令类型抛异常
         throw new BindingException("Unknown execution method for: " + command.getName());
     }
+    //方法返回返回类型为基本类型如：int update()，切实际返回null,抛异常
     if (result == null && method.getReturnType().isPrimitive() && !method.returnsVoid()) {
       throw new BindingException("Mapper method '" + command.getName() 
           + " attempted to return null from a method with a primitive return type (" + method.getReturnType() + ").");
@@ -111,18 +112,27 @@ public class MapperMethod {
     return result;
   }
 
+    /**
+     * 检查方法值类型
+     * @param rowCount
+     * @return
+     */
   private Object rowCountResult(int rowCount) {
     final Object result;
     if (method.returnsVoid()) {
       result = null;
     } else if (Integer.class.equals(method.getReturnType()) || Integer.TYPE.equals(method.getReturnType())) {
-      result = rowCount;
+        //int类型处理
+        result = rowCount;
     } else if (Long.class.equals(method.getReturnType()) || Long.TYPE.equals(method.getReturnType())) {
-      result = (long)rowCount;
+        //long类型处理
+        result = (long)rowCount;
     } else if (Boolean.class.equals(method.getReturnType()) || Boolean.TYPE.equals(method.getReturnType())) {
-      result = rowCount > 0;
+        //boolean类型处理
+        result = rowCount > 0;
     } else {
-      throw new BindingException("Mapper method '" + command.getName() + "' has an unsupported return type: " + method.getReturnType());
+        //其他类型抛异常
+        throw new BindingException("Mapper method '" + command.getName() + "' has an unsupported return type: " + method.getReturnType());
     }
     return result;
   }

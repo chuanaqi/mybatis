@@ -120,22 +120,30 @@ public class ParamNameResolver {
    * Multiple parameters are named using the naming rule.
    * In addition to the default names, this method also adds the generic names (param1, param2,
    * ...).
+   * sql执行参数转换
    * </p>
    */
   public Object getNamedParams(Object[] args) {
     final int paramCount = names.size();
     if (args == null || paramCount == 0) {
+      //没有参数直接返回null
       return null;
     } else if (!hasParamAnnotation && paramCount == 1) {
+      //如果只有一个参数
       return args[names.firstKey()];
     } else {
+      //多个参数，返回一个map,
       final Map<String, Object> param = new ParamMap<>();
       int i = 0;
       for (Map.Entry<Integer, String> entry : names.entrySet()) {
+        //先加#{0},#{1},#{2}...参数
         param.put(entry.getValue(), args[entry.getKey()]);
         // add generic param names (param1, param2, ...)
         final String genericParamName = GENERIC_NAME_PREFIX + String.valueOf(i + 1);
         // ensure not to overwrite parameter named with @Param
+        //#{param1},#{param2}...参数
+        //默认情况下使用它们在参数列表中的位置来命名,比如:#{param1},#{param2}等。
+        //若要改变参数的名称(只在多参数情况下) ,你可以在参数上使用@Param(“paramName”)注解。
         if (!names.containsValue(genericParamName)) {
           param.put(genericParamName, args[entry.getKey()]);
         }

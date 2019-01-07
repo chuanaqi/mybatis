@@ -46,6 +46,7 @@ import org.apache.ibatis.type.TypeHandlerRegistry;
 
 /**
  * @author Clinton Begin
+ * 执行器基类
  */
 public abstract class BaseExecutor implements Executor {
 
@@ -54,11 +55,15 @@ public abstract class BaseExecutor implements Executor {
   protected Transaction transaction;
   protected Executor wrapper;
 
+  //延迟加在队列-线程安全
   protected ConcurrentLinkedQueue<DeferredLoad> deferredLoads;
+  //本地缓存机制（Local Cache）防止循环引用（circular references）和加速重复嵌套查询(一级缓存)
+  //本地缓存
   protected PerpetualCache localCache;
+  //本地输出参数缓存
   protected PerpetualCache localOutputParameterCache;
   protected Configuration configuration;
-
+  //查询堆栈
   protected int queryStack;
   private boolean closed;
 
@@ -107,13 +112,22 @@ public abstract class BaseExecutor implements Executor {
     return closed;
   }
 
+  /**
+   * SqlSession.update/insert/delete会调用此方法
+   * @param ms
+   * @param parameter
+   * @return
+   * @throws SQLException
+   */
   @Override
   public int update(MappedStatement ms, Object parameter) throws SQLException {
     ErrorContext.instance().resource(ms.getResource()).activity("executing an update").object(ms.getId());
     if (closed) {
       throw new ExecutorException("Executor was closed.");
     }
+    //先清局部缓存
     clearLocalCache();
+    //更新，如何更新交由子类，子类实现抽象方法，模板方法模式
     return doUpdate(ms, parameter);
   }
 
@@ -122,6 +136,12 @@ public abstract class BaseExecutor implements Executor {
     return flushStatements(false);
   }
 
+  /**
+   * 清理缓存Statement对象，ReuseExecutor，BatchExecutor，其他Executor空实现
+   * @param isRollBack
+   * @return
+   * @throws SQLException
+   */
   public List<BatchResult> flushStatements(boolean isRollBack) throws SQLException {
     if (closed) {
       throw new ExecutorException("Executor was closed.");
@@ -129,10 +149,23 @@ public abstract class BaseExecutor implements Executor {
     return doFlushStatements(isRollBack);
   }
 
+  /**
+   * SqlSession.selectList会调用此方法
+   * @param ms
+   * @param parameter
+   * @param rowBounds
+   * @param resultHandler
+   * @param <E>
+   * @return
+   * @throws SQLException
+   */
   @Override
   public <E> List<E> query(MappedStatement ms, Object parameter, RowBounds rowBounds, ResultHandler resultHandler) throws SQLException {
+    //获取绑定sql
     BoundSql boundSql = ms.getBoundSql(parameter);
+    //创建缓存key
     CacheKey key = createCacheKey(ms, parameter, rowBounds, boundSql);
+    //查询
     return query(ms, parameter, rowBounds, resultHandler, key, boundSql);
  }
 
@@ -140,50 +173,78 @@ public abstract class BaseExecutor implements Executor {
   @Override
   public <E> List<E> query(MappedStatement ms, Object parameter, RowBounds rowBounds, ResultHandler resultHandler, CacheKey key, BoundSql boundSql) throws SQLException {
     ErrorContext.instance().resource(ms.getResource()).activity("executing a query").object(ms.getId());
+    //执行器已关闭，抛异常
     if (closed) {
       throw new ExecutorException("Executor was closed.");
     }
+    //查询堆栈为0，清理缓存，防止局部调用重复清理
     if (queryStack == 0 && ms.isFlushCacheRequired()) {
       clearLocalCache();
     }
     List<E> list;
     try {
+      //防止递归调用时重复清理局部缓存
       queryStack++;
+      //先根据cachekey从localCache去查
       list = resultHandler == null ? (List<E>) localCache.getObject(key) : null;
       if (list != null) {
+        //若查到localCache缓存，处理localOutputParameterCache
         handleLocallyCachedOutputParameters(ms, key, parameter, boundSql);
       } else {
+        //从数据库查
         list = queryFromDatabase(ms, parameter, rowBounds, resultHandler, key, boundSql);
       }
     } finally {
+      //清空堆栈
       queryStack--;
     }
     if (queryStack == 0) {
+      //加载延迟加载队列中所有元素
       for (DeferredLoad deferredLoad : deferredLoads) {
         deferredLoad.load();
       }
       // issue #601
+      //清空延迟加载队列
       deferredLoads.clear();
       if (configuration.getLocalCacheScope() == LocalCacheScope.STATEMENT) {
         // issue #482
+        //如果是STATEMENT，清本地缓存
         clearLocalCache();
       }
     }
     return list;
   }
 
+  /**
+   * 3.4新增方法
+   * @param ms
+   * @param parameter
+   * @param rowBounds
+   * @param <E>
+   * @return
+   * @throws SQLException
+   */
   @Override
   public <E> Cursor<E> queryCursor(MappedStatement ms, Object parameter, RowBounds rowBounds) throws SQLException {
     BoundSql boundSql = ms.getBoundSql(parameter);
     return doQueryCursor(ms, parameter, rowBounds, boundSql);
   }
 
+  /**
+   * 延迟加载，DefaultResultSetHandler.getNestedQueryMappingValue调用.属于嵌套查询，比较高级.
+   * @param ms
+   * @param resultObject
+   * @param property
+   * @param key
+   * @param targetType
+   */
   @Override
   public void deferLoad(MappedStatement ms, MetaObject resultObject, String property, CacheKey key, Class<?> targetType) {
     if (closed) {
       throw new ExecutorException("Executor was closed.");
     }
     DeferredLoad deferredLoad = new DeferredLoad(resultObject, property, key, localCache, configuration, targetType);
+    //如果能加载，则立刻加载，否则加入到延迟加载队列中
     if (deferredLoad.canLoad()) {
       deferredLoad.load();
     } else {
@@ -191,11 +252,20 @@ public abstract class BaseExecutor implements Executor {
     }
   }
 
+  /**
+   * 创建缓存key
+   * @param ms
+   * @param parameterObject
+   * @param rowBounds
+   * @param boundSql
+   * @return
+   */
   @Override
   public CacheKey createCacheKey(MappedStatement ms, Object parameterObject, RowBounds rowBounds, BoundSql boundSql) {
     if (closed) {
       throw new ExecutorException("Executor was closed.");
     }
+    //Key 的生成采取规则为：[mappedStementId + offset + limit + SQL + queryParams + environment]生成一个哈希码
     CacheKey cacheKey = new CacheKey();
     cacheKey.update(ms.getId());
     cacheKey.update(rowBounds.getOffset());
@@ -270,6 +340,12 @@ public abstract class BaseExecutor implements Executor {
   protected abstract int doUpdate(MappedStatement ms, Object parameter)
       throws SQLException;
 
+  /**
+   * 清理Statement commit rollback是调用
+   * @param isRollback
+   * @return
+   * @throws SQLException
+   */
   protected abstract List<BatchResult> doFlushStatements(boolean isRollback)
       throws SQLException;
 
@@ -317,15 +393,31 @@ public abstract class BaseExecutor implements Executor {
     }
   }
 
+  /**
+   * 冲数据库中查询
+   * @param ms
+   * @param parameter
+   * @param rowBounds
+   * @param resultHandler
+   * @param key
+   * @param boundSql
+   * @param <E>
+   * @return
+   * @throws SQLException
+   */
   private <E> List<E> queryFromDatabase(MappedStatement ms, Object parameter, RowBounds rowBounds, ResultHandler resultHandler, CacheKey key, BoundSql boundSql) throws SQLException {
     List<E> list;
+    //先向缓存中放入占位符？？？
     localCache.putObject(key, EXECUTION_PLACEHOLDER);
     try {
       list = doQuery(ms, parameter, rowBounds, resultHandler, boundSql);
     } finally {
+      //最后删除占位符
       localCache.removeObject(key);
     }
+    //结果加入缓存
     localCache.putObject(key, list);
+    //如果是存储过程，OUT参数也加入缓存
     if (ms.getStatementType() == StatementType.CALLABLE) {
       localOutputParameterCache.putObject(key, parameter);
     }
@@ -335,6 +427,7 @@ public abstract class BaseExecutor implements Executor {
   protected Connection getConnection(Log statementLog) throws SQLException {
     Connection connection = transaction.getConnection();
     if (statementLog.isDebugEnabled()) {
+      //如果需要打印Connection的日志，返回一个ConnectionLogger(代理模式, AOP思想)
       return ConnectionLogger.newInstance(connection, statementLog, queryStack);
     } else {
       return connection;
@@ -345,7 +438,10 @@ public abstract class BaseExecutor implements Executor {
   public void setExecutorWrapper(Executor wrapper) {
     this.wrapper = wrapper;
   }
-  
+
+  /**
+   * 延迟加载
+   */
   private static class DeferredLoad {
 
     private final MetaObject resultObject;
@@ -373,9 +469,10 @@ public abstract class BaseExecutor implements Executor {
     }
 
     public boolean canLoad() {
+      //缓存中存在，且不为占位符，代表可以加载
       return localCache.getObject(key) != null && localCache.getObject(key) != EXECUTION_PLACEHOLDER;
     }
-
+    //加载
     public void load() {
       @SuppressWarnings( "unchecked" )
       // we suppose we get back a List
